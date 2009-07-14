@@ -1,0 +1,400 @@
+#!/bin/bash
+#
+# Packup - a Pacman backup & restore script
+# Copyright (C) 2008 Daniel J Griffiths <ghost1227@archlinux.us>
+# Thanks to
+#	- Louipc, Foutrelis (alpha testing)
+#	- Mimi (v0.2 bugfix)
+#	- Iphitus (bash tips incorporated into v0.3)
+#
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 2 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+# 02110-1301, USA.  
+
+
+############################################################
+# Configure stuff                                          #
+############################################################
+# DATEFMT     = This is the format used for the date in    #
+#               packup snapshot filenames  (this is set in #
+#               packuprc, please change it there)          #
+# BACKUP_DIR  = This is the location that backups are      #
+#               saved to (this is set in packuprc, please  #
+#               change it there)                           #
+# EDITOR      = This is the editor that is used to modify  #
+#               configuration files from packup (this is   #
+#               set in packuprc, please change it there)   #
+# ARGUMENT    = Don't screw with this, all it does is      #
+#               create a variable storing any arguments    #
+# OPTION      = Don't screw with this either, see previous #
+# VER         = You can change it if you want, but there's #
+#               really no point... it's just gonna cause   #
+#               packup to list it's version incorrectly    #
+# TITLE       = Don't screw with this either, it's just    #
+#               there to make my life easier               #
+# TMP         = This is the location of the Packup temp    #
+#               file (default /tmp/packup.tmp)             #
+############################################################
+if [[ -f ~/.config/packup/packuprc ]]; then
+	source ~/.config/packup/packuprc
+else
+	DATEFMT=%Y%m%d-%H%M
+	BACKUP_DIR=$HOME
+	EDITOR=vi
+fi
+ARGUMENT=$1
+OPTION=$2
+VER=0.4
+TITLE="Packup $VER - Pacman backup & restore script (Alpha Release)"
+TMP="/tmp/packup.tmp"
+
+############################################################
+# Version function - Displays version information          #
+############################################################
+version() {
+	echo "packup v$VER"
+}
+
+############################################################
+# Usage function - Displays usage information              #
+############################################################
+usage() {
+	version
+	echo "Usage:"
+	echo "      Main program:             packup"
+	echo "      Other functions:          packup argument"
+	echo "Arguments:"
+	echo "      -h, --help     This message"
+	echo "      -v, --version  Output version information and exit"
+	echo "      -w, --welcome  Displays the welcome dialog"
+}
+
+############################################################
+# Main function - Duh                                      #
+############################################################
+main() {
+	if [[ ! -f ~/.config/packup/.firstrun ]]; then
+		welcome
+	fi
+	if [[ ! -f ~/.config/packup/packuprc ]]; then
+		createrc
+	fi
+	dialog --backtitle "$TITLE" --colors --title "Packup main menu" --cancel-label "Quit" --menu "" 9 50 3 "1" "Backup menu" "2" "Restore from snapshot" "3" "Edit menu" 2>"$TMP"
+	read DV <"$TMP"
+	rm -f "$TMP"
+	if [[ "$DV" = "1" ]]; then
+		backup
+	elif [[ "$DV" = "2" ]]; then
+		restore
+	elif [[ "$DV" = "3" ]]; then
+		edit
+	else
+		clear
+		exit
+	fi
+}
+
+############################################################
+# Welcome function - Called on firstrun                    #
+############################################################
+welcome () {
+	dialog --backtitle "$TITLE - First Run" --colors --title "Welcome to Packup!" --no-collapse --msgbox "\n\Zb\Z4What is Packup?\Zn\nPackup is a simple Pacman backup & restore script.\n\n\Zb\Z4So... it makes a backup of all my software?\Zn\nNo. Packup simply takes a snapshot of all the packages that are currently installed on your system, as well as allowing you to restore those snapshots at a later date (or on a different computer).\n\n\Zb\Z4Cool! What else can it do?\Zn\nHere's the current feature list:\n  * Backup & restore packages from official repos (core/extra)\n  * Backup & restore packages from unofficial repos (community/aur/other)\n  * Backup & restore pacman and yaourt configurations\n  * Edit pacman and yaourt configurations\n\n\Zb\Z1--WARNING--\Zn\n\ZbPackup IS ALPHA SOFTWARE\Zn. The Packup team is not responsible for loss of data, partition or hard disk corruption, computer implosion, terminal disease, anal leakage, demonic uprising, global thermonuclear war, universal annihilation, or any other damage caused by the use of Packup.\n\n\n\n
+                            \Zb\Z4HAVE FUN! - The Packup Development Team\Zn" 30 100
+	if [[ ! -f ~.config/packup/.firstrun ]]; then
+		mkdir -p ~/.config/packup
+		touch ~/.config/packup/.firstrun
+	fi
+	main
+}
+
+############################################################
+# Create packuprc file                                     #
+############################################################
+createrc() {
+	(
+	cat <<'EOF'
+# packup configuration file
+
+# set date format
+# date options are as follows:
+#	%a - abbreviated weekday name (e.g., Sun)
+#	%A - full weekday name (e.g., Sunday)
+#	%b - abbreviated month name (e.g., Jan)
+#	%B - full month name (e.g., January)
+#	%d - day of month (e.g., 01)
+#	%H - hour - 24hr format (00..23)
+#	%I - hour - 12hr format (01..12)
+#	%j - day of year (001..366)
+#	%m - month (01..12)
+#	%M - minute (00..59)
+#	%P - AM/PM
+#	%p - am/pm
+#	%S - seconds (00..60)
+#	%y - last two digits of year (e.g., 09)
+#	%Y - year (e.g., 2009)
+# default=%Y%m%d-%H%M
+DATEFMT=%Y%m%d-%H%M
+
+# set backup directory
+BACKUP_DIR=$HOME
+
+# set default editor
+EDITOR=vi
+EOF
+	) > ~/.config/packup/packuprc
+	main
+}
+
+############################################################
+# Backup function - Main backup menu                       #
+############################################################
+backup() {
+	dialog --backtitle "$TITLE" --colors --title "Backup menu" --cancel-label "Quit" --menu "" 10 50 4 "1" "Backup installed packages" "2" "Backup pacman.conf" "3" "Backup yaourtrc" "4" "Return to main menu" 2>"$TMP"
+	read DV <"$TMP"
+	rm -f "$TMP"
+	if [[ "$DV" = "1" ]]; then
+		backup_packages
+	elif [[ "$DV" = "2" ]]; then
+		backup_config
+	elif [[ "$DV" = "3" ]]; then
+		if [[ -f /usr/bin/yaourt ]]; then
+			backup_yaourt
+		else
+			dialog --backtitle "$TITLE" --colors --title "\Zb\Z1ERROR!\Zn" --msgbox "Yaourt does not appear to be installed!" 5 43
+			backup
+		fi
+	elif [[ "$DV" = "4" ]]; then
+		main
+	else
+		clear
+		exit
+	fi
+}
+
+############################################################
+# Backup installed packages menu - Duh                     #
+############################################################
+backup_packages() {
+	dialog --backtitle "$TITLE" --colors --title "Backup installed packages" --cancel-label "Quit" --menu "" 10 50 4 "1" "Backup all packages" "2" "Backup official packages" "3" "Backup unofficial packages" "4" "Return to main menu" 2>"$TMP"
+	read DV <"$TMP"
+	rm -f "$TMP"
+	if [[ "$DV" = "1" ]]; then
+		backup_all
+	elif [[ "$DV" = "2" ]]; then
+		backup_official
+	elif [[ "$DV" = "3" ]]; then
+		backup_unofficial
+	elif [[ "$DV" = "5" ]]; then
+		main
+	else
+		clear
+		exit
+	fi
+}
+
+############################################################
+# Backup all packages                                      #
+############################################################
+backup_all() {
+	TIMESTAMP=$(eval date +$DATEFMT)
+	pacman -Qeq > "$BACKUP_DIR/packup-complete-$TIMESTAMP"
+	dialog --backtitle "$TITLE" --colors --title "Complete Package Backup" --textbox "$BACKUP_DIR/packup-complete-$TIMESTAMP" 50 100
+	if [[ -f $BACKUP_DIR/packup-complete-$TIMESTAMP ]]; then
+		dialog --backtitle "$TITLE" --colors --title "Complete Package Backup" --msgbox "Backup completed successfully to $BACKUP_DIR/packup-complete-$TIMESTAMP!" 0 0
+	else
+		dialog --backtitle "$TITLE" --colors --title "\Z1ERROR\Zn" --msgbox "Backup failed!" 0 0
+	fi
+	main
+}
+
+############################################################
+# Backup official packages                                 #
+############################################################
+backup_official() {
+	TIMESTAMP=$(eval date +$DATEFMT)
+	pacman -Qeq > /tmp/packup-all && pacman -Qm | awk '{print $1}' > /tmp/packup-unofficial && comm -13 /tmp/packup-unofficial /tmp/packup-all > $BACKUP_DIR/packup-official-$TIMESTAMP  
+	rm -f /tmp/packup-{unofficial,all}
+	dialog --backtitle "$TITLE" --colors --title "Official Package Backup" --textbox "$BACKUP_DIR/packup-official-$TIMESTAMP" 50 100
+	if [[ -f $BACKUP_DIR/packup-official-$TIMESTAMP ]]; then
+		dialog --backtitle "$TITLE" --colors --title "Official Package Backup" --msgbox "Backup completed successfully to $BACKUP_DIR/packup-official-$TIMESTAMP!" 0 0
+	else
+		dialog --backtitle "$TITLE" --colors --title "\Z1ERROR\Zn" --msgbox "Backup failed!" 0 0
+	fi
+	main
+}
+
+############################################################
+# Backup unofficial packages                               #
+############################################################
+backup_unofficial() {
+	TIMESTAMP=$(eval date +$DATEFMT)
+	pacman -Qmq > "$BACKUP_DIR/packup-unofficial-$TIMESTAMP"
+	dialog --backtitle "$TITLE" --colors --title "Unofficial Package Backup" --textbox "$BACKUP_DIR/packup-unofficial-$TIMESTAMP" 50 100
+	if [[ -f $BACKUP_DIR/packup-unofficial-$TIMESTAMP ]]; then
+		dialog --backtitle "$TITLE" --colors --title "Unofficial Package Backup" --msgbox "Backup completed successfully to $BACKUP_DIR/packup-unofficial-$TIMESTAMP!" 0 0
+	else
+		dialog --backtitle "$TITLE" --colors --title "\Z1ERROR\Zn" --msgbox "Backup failed!" 0 0
+	fi
+	main
+}
+
+############################################################
+# Backup pacman.conf                                       #
+############################################################
+backup_config() {
+	TIMESTAMP=$(eval date +$DATEFMT)
+	cp /etc/pacman.conf $BACKUP_DIR/packup-pacman-$TIMESTAMP
+	dialog --backtitle "$TITLE" --colors --title "Backup pacman.conf" --msgbox "pacman.conf has been backed up to \"$BACKUP_DIR/packup-pacman-$TIMESTAMP\"" 0 0
+	main
+}
+
+############################################################
+# Backup yaourtrc                                          #
+############################################################
+backup_yaourt() {
+	TIMESTAMP=$(eval date +$DATEFMT)
+	cp /etc/yaourtrc $BACKUP_DIR/packup-yaourtrc-$TIMESTAMP
+	dialog --backtitle "$TITLE" --colors --title "Backup yaourtrc" --msgbox "yaourtrc has been backed up to \"$BACKUP_DIR/packup-yaourtrc-$TIMESTAMP\"" 0 0
+	main
+}
+
+############################################################
+# Restore from Packup snapshot file                        #
+############################################################
+restore() {
+	if [[ "$(id -u)" != "0" ]]; then
+		dialog --backtitle "$TITLE" --colors --title "\Z1ERROR\Zn" --msgbox "This option can only be run by root!" 0 0
+		main
+	else
+		cd $BACKUP_DIR
+		find packup-* -maxdepth 0 -type f > /tmp/packup_list && sed -i '/^$/d' /tmp/packup_list
+		MENU_NUM=$(cat /tmp/packup_list | wc -l)
+		MENU_COUNT=1
+		while [[ "$MENU_COUNT" -le "$MENU_NUM" ]]; do
+			MENU_TEXT="$MENU_TEXT $MENU_COUNT $(awk NR==$MENU_COUNT /tmp/packup_list)"
+			MENU_COUNT=$(($MENU_COUNT+1))
+		done
+		dialog --backtitle "$TITLE" --colors --title "Restore from snapshot" --menu "" 0 40 $MENU_NUM $MENU_TEXT 2>"$TMP"
+		read DV <"$TMP"
+		rm -f "$TMP"
+		RESTORE_FILE=$(awk NR==$DV /tmp/packup_list)
+		if [[ $RESTORE_FILE = *-off* ]]; then
+			PKGMAN="pacman --noconfirm --noprogressbar -S "
+			restore_install
+		elif [[ $RESTORE_FILE = *-unof* ]]; then
+			dialog --backtitle "$TITLE" --colors --title "\Z1ALERT\Zn" --yes-label "Run Yaourt" --no-label "Quit" --yesno "Unofficial packages cannot be installed through pacman, therefore yaourt is used. If you do not have yaourt installed, please quit packup and install yaourt before continuing. Would you like to continue?" 0 0
+			if [[ $? = 0 ]]; then
+				PKGMAN="yaourt --noconfirm --noprogressbar -S "
+				restore_install
+			else
+				clear
+				exit
+			fi
+		elif [[ $RESTORE_FILE = *-com* ]]; then
+			dialog --backtitle "$TITLE" --colors --title "\Z1ALERT\Zn" --extra-button --ok-label "Run Pacman" --extra-label "Run Yaourt" --cancel-label "Quit" --yesno "Unofficial packages cannot be installed through pacman, therefore yaourt is used.\n\nIf you are sure that this backup includes no unofficial packages, you may continue by pressing the \"Run Pacman\" button.\n\nIf unofficial packages are included, you may either continue by pressing the \"Run Yaourt\" button, or quit packup." 0 0
+			if [[ $? = 0 ]]; then
+				PKGMAN="pacman --noconfirm --noprogressbar -S "
+				restore_install
+			elif [[ $? = 3 ]]; then
+				PKGMAN="yaourt --noconfirm --noprogressbar -S "
+				restore_install
+			else
+				clear
+				exit
+			fi
+		elif [[ $RESTORE_FILE = *-pac* ]]; then
+			cp $RESTORE_FILE /etc/pacman.conf
+			dialog --backtitle "$TITLE" --colors --title "Restore pacman.conf" --msgbox "pacman.conf has been restored from \"$RESTORE_FILE\"" 0 0
+			main
+		elif [[ $RESTORE_FILE = *-yao* ]]; then
+			cp $RESTORE_FILE /etc/yaourtrc
+			dialog --backtitle "$TITLE" --colors --title "Restore yaourtrc" --msgbox "yaourtrc has been restored from \"$RESTORE_FILE\"" 0 0
+			main
+		fi
+		clear
+		exit
+	fi
+}
+
+############################################################
+# Install function - called by restore()                   #
+############################################################
+restore_install() {
+	$PKGMAN $(cat $BACKUP_DIR/$RESTORE_FILE) | dialog --backtitle "$TITLE" --colors --title "Restoring from snapshot $RESTORE_FILE" --progressbox 50 100
+	dialog --backtitle "$TITLE" --colors --title "Restore completed" --msgbox "Snapshot $RESTORE_FILE restore completed." 0 0
+	main
+}
+
+############################################################
+# Edit function - allows editing of config files           #
+############################################################
+edit() {
+	dialog --backtitle "$TITLE" --colors --title "Edit menu" --cancel-label "Quit" --menu "" 10 50 4 "1" "Edit packup configuration" "2" "Edit pacman configuration" "3" "Edit yaourt configuration" "4" "Return to main menu" 2>"$TMP"
+	read DV <"$TMP"
+	rm -f "$TMP"
+	if [[ "$DV" = "1" ]]; then
+		$EDITOR ~/.config/packup/packuprc
+		edit
+	elif [[ "$DV" = "2" ]]; then
+		if [[ "$(id -u)" != "0" ]]; then
+			dialog --backtitle "$TITLE" --colors --title "\Z1ERROR\Zn" --msgbox "This option can only be run by root!" 0 0
+			edit
+		else
+			$EDITOR /etc/pacman.conf
+			edit
+		fi
+	elif [[ "$DV" = "3" ]]; then
+		if [[ -f /usr/bin/yaourt ]]; then
+			if [[ "$(id -u)" != "0" ]]; then
+				dialog --backtitle "$TITLE" --colors --title "\Z1ERROR\Zn" --msgbox "This option can only be run by root!" 0 0
+				edit
+			else
+				$EDITOR /etc/yaourtrc
+				edit
+			fi
+		else
+			dialog --backtitle "$TITLE" --colors --title "\Zb\Z1ERROR!\Zn" --msgbox "Yaourt does not appear to be installed!" 5 43
+			edit
+		fi
+	elif [[ "$DV" = "4" ]]; then
+		main
+	else
+		clear
+		exit
+	fi
+}
+
+############################################################
+# Check arguments passed at runtime                        #
+############################################################
+case "$1" in
+	'-w'|'--welcome')
+	welcome
+	;;
+	'-h'|'--help')
+	usage
+	;;
+	'-v'|'--version')
+	version
+	;;
+	'')
+	main
+	;;
+	*)
+	usage
+	;;
+esac
+																		
+
+

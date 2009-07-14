@@ -1,0 +1,13 @@
+Version 0.3 (2009-01-07)
+	- Replaced all occurrences of `` with $()
+	- Replaced ls with find
+	- Replaced [] with bash's inbuilt [[]]
+
+Version 0.2 (2009-01-02)
+	- Replaced 'ls -Bl' with 'ls -Bl --time-style=iso' to resolve issues with different date formats (thanks Mimi)
+
+Version 0.1b (2008-12-29)
+	- Minor code cleanup.
+
+Version 0.1a (2008-12-28)
+	- Initial release.
